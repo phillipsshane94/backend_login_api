@@ -29,10 +29,9 @@ type Claims struct {
 var secretToken = "112233445566"
 
 // All handlers take an http.ResponseWriter and an *http.Request for fulfilling the requirements
-// of mux.HandleFunc and for getting user input from web forms.
+// of mux.HandleFunc.
 
-// SignupHandler will display the signup page that allows a user to enter an email and password
-// that will be logged into the database, allowing that user to login to the website.
+// SignupHandler
 func SignupHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	newUser := User{}
@@ -55,8 +54,7 @@ func SignupHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// LoginHandler will display the login page that allows a user to enter an email and password
-// to log in to the website.  Redirects to the home page upon successful login.
+// LoginHandler
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -122,6 +120,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// HomeHandler
 func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("token")
 	if err != nil {
@@ -159,6 +158,7 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf("Welcome home, %s!", claims.Email)))
 }
 
+// hash
 func hash(pass []byte) string {
 	hashed, err := bcrypt.GenerateFromPassword(pass, bcrypt.MinCost)
 	if err != nil {
