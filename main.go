@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/golang-jwt/jwt"
 	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
@@ -20,12 +21,15 @@ type User struct {
 	LastName  string `json:"lastname"`
 }
 
+type Claims struct {
+	Email string `json:"email"`
+	jwt.StandardClaims
+}
+
+var secretToken = "112233445566"
+
 // All handlers take an http.ResponseWriter and an *http.Request for fulfilling the requirements
 // of mux.HandleFunc and for getting user input from web forms.
-
-func HomeHandler(w http.ResponseWriter, r *http.Request) {
-
-}
 
 // SignupHandler will display the signup page that allows a user to enter an email and password
 // that will be logged into the database, allowing that user to login to the website.
@@ -58,7 +62,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	user := User{}
 	json.NewDecoder(r.Body).Decode(&user)
-	login := login(user.Email, user.Password)
+	login := validate(user.Email, user.Password, w)
 	if login["login"] == "good" {
 		response := login
 		json.NewEncoder(w).Encode(response)
@@ -67,7 +71,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func login(email string, pass string) map[string]interface{} {
+func validate(email string, pass string, w http.ResponseWriter) map[string]interface{} {
 	dbUser := User{}
 
 	row := db.QueryRow("SELECT email, password, firstname, lastname FROM ArrayTestTable WHERE email = ?", email)
@@ -84,13 +88,75 @@ func login(email string, pass string) map[string]interface{} {
 		return map[string]interface{}{"message": "wrong password"}
 	}
 
+	expiration := time.Now().Add(5 * time.Minute)
+	claims := &Claims{
+		Email: dbUser.Email,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: expiration.Unix(),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(secretToken))
+	if err != nil {
+		return map[string]interface{}{"message": "problem generating token"}
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:    "token",
+		Value:   tokenString,
+		Expires: expiration,
+	})
+
+	// _, err = db.Exec("INSERT INTO ArrayTestTable (token) VALUES (?) WHERE email=?", token, email)
+	// if err != nil {
+	// 	return map[string]interface{}{"message": "problem inserting token"}
+	// }
+
 	var response = map[string]interface{}{"login": "good"}
+	response["jwt"] = token
 	response["data"] = dbUser
 	return response
 }
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
+}
+
+func HomeHandler(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("token")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			// If the cookie is not set, return an unauthorized status
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		// For any other type of error, return a bad request status
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	tokenString := c.Value
+	claims := &Claims{}
+
+	token, err := jwt.ParseWithClaims(tokenString, claims,
+		func(token *jwt.Token) (interface{}, error) {
+			return secretToken, nil
+		})
+	if err != nil {
+		if err == jwt.ErrSignatureInvalid {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if !token.Valid {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	w.Write([]byte(fmt.Sprintf("Welcome home, %s!", claims.Email)))
 }
 
 func hash(pass []byte) string {
