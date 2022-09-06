@@ -14,6 +14,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Type User is used to store the info for each individual user in the database.
 type User struct {
 	Email     string `json:"email"`
 	Password  string `json:"password"` //length is 32 in database
@@ -21,6 +22,7 @@ type User struct {
 	LastName  string `json:"lastname"`
 }
 
+// Type Claims is used for evaluating claims for tokens on a user's email.
 type Claims struct {
 	Email string `json:"email"`
 	jwt.StandardClaims
@@ -31,7 +33,8 @@ var secretToken = []byte("112233445566")
 // All handlers take an http.ResponseWriter and an *http.Request for fulfilling the requirements
 // of mux.HandleFunc.
 
-// SignupHandler
+// SignupHandler takes the decoded json data from the POST request, checks if the email is already
+// in the database, and inserts into the database if it was not already found.
 func SignupHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	newUser := User{}
@@ -54,7 +57,8 @@ func SignupHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// LoginHandler
+// LoginHandler decodes the json data from the GET request and calls the validate function on
+// the provided email and password to check if the info provided was correct.
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	user := User{}
@@ -69,6 +73,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// validate checks to see if the provided email is in the database, then compares the provided
+// password with the stored database password.  It creates a Claims object with the email and
+// a 5 minute expiration.  The claim is used to create and sign a token to be set in a cookie
+// for caching the user's session until logout.
 func validate(email string, pass string, w http.ResponseWriter) map[string]interface{} {
 	dbUser := User{}
 
@@ -85,8 +93,6 @@ func validate(email string, pass string, w http.ResponseWriter) map[string]inter
 	if passErr != nil {
 		return map[string]interface{}{"message": "wrong password"}
 	}
-	fmt.Println(dbUser)
-
 	expiration := time.Now().Add(5 * time.Minute)
 	claims := &Claims{
 		Email: dbUser.Email,
@@ -106,37 +112,33 @@ func validate(email string, pass string, w http.ResponseWriter) map[string]inter
 		Expires: expiration,
 	})
 
-	_, err = db.Exec("INSERT INTO RevokedKeys VALUES(?, ?)", tokenString, expiration)
+	_, err = db.Exec("INSERT INTO Session VALUES(?)", tokenString)
 	if err != nil {
-		return map[string]interface{}{"message": "server problem with authkey"}
+		return map[string]interface{}{"message": "problem inserting token into session"}
 	}
 
 	var response = map[string]interface{}{"login": "good"}
-	response["jwt"] = tokenString
 	response["data"] = dbUser
 	return response
 }
 
+// LogoutHandler checks the cookie of the logged in user, generates a Claims object from the cookie info,
+// pulls the token expiration time, and inserts the token with the expiration time into the
+// revokedTokens table.
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
-
-}
-
-// HomeHandler
-func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("token")
 	if err != nil {
 		if err == http.ErrNoCookie {
-			// If the cookie is not set, return an unauthorized status
-			w.WriteHeader(http.StatusUnauthorized)
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
-		// For any other type of error, return a bad request status
-		w.WriteHeader(http.StatusBadRequest)
-		return
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
+
+	//pull claim to get expiration of token
 	tokenString := c.Value
 	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims,
+	_, err = jwt.ParseWithClaims(tokenString, claims,
 		func(token *jwt.Token) (interface{}, error) {
 			return secretToken, nil
 		})
@@ -149,28 +151,88 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//inserts token with expiration time
+	_, err = db.Exec("DELETE FROM Session WHERE token=?", tokenString)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write([]byte("Logged out!"))
+}
+
+// HomeHandler checks the cookie of the logged in user then generates a Claims object from the
+// token info in the cookie and checks the validity of the token.  This function also queries the
+// revokedTokens table for the current token, returning an error if the current token is in that table.
+// Otherwise, ArrayTestTable is queried for the firstname of the user and the user is welcomed home.
+func HomeHandler(w http.ResponseWriter, r *http.Request) {
+	c, err := r.Cookie("token")
+	if err != nil {
+		if err == http.ErrNoCookie {
+			// If the cookie is not set, return an unauthorized status
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		// For any other type of error, return a bad request status
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	//token checking
+	tokenString := c.Value
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims,
+		func(token *jwt.Token) (interface{}, error) {
+			return secretToken, nil
+		})
+
+	if err != nil {
+		if err == jwt.ErrSignatureInvalid {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if !token.Valid {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	//check if key is in revoked table
-	row := db.QueryRow("SELECT key FROM RevokedKeys WHERE key=?", tokenString)
-	err = row.Scan()
-	if err != sql.ErrNoRows { //key has been revoked
-		http.Error(w, "token has expired", http.StatusBadRequest)
+	//check if key is in session table
+	var key string
+	row := db.QueryRow("SELECT token FROM Session WHERE token=?", tokenString)
+	err = row.Scan(&key)
+	if err != nil { //the key was found in Session table
+		http.Error(w, "need new login token", http.StatusUnauthorized)
+		return
 	}
 
-	w.Write([]byte(fmt.Sprintf("Welcome home, %s!", claims.Email)))
+	if key != tokenString {
+		http.Error(w, "need new login token", http.StatusUnauthorized)
+		return
+	}
+
+	var fname string
+	row = db.QueryRow("SELECT firstname FROM ArrayTestTable WHERE email=?", claims.Email)
+	err = row.Scan(&fname)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Write([]byte(fmt.Sprintf("Welcome home, %s!", fname)))
 }
 
-// hash
+// hash is used to generate an encrypted password from what was provided by the user.
 func hash(pass []byte) string {
 	hashed, err := bcrypt.GenerateFromPassword(pass, bcrypt.MinCost)
 	if err != nil {
 		panic(err.Error())
 	}
 	return string(hashed)
+}
+
+// clearSession deletes any token remnants from the session table on startup.
+func clearSession() {
+	_, _ = db.Exec("DELETE FROM Session")
 }
 
 var db *sql.DB
@@ -198,7 +260,7 @@ func main() {
 		ReadTimeout:  15 * time.Second,
 	}
 
-	//go routine to check revoked keys table and purge based on expiry time
+	clearSession()
 
-	log.Fatal(srv.ListenAndServe())
+	go log.Fatal(srv.ListenAndServe())
 }
