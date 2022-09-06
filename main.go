@@ -26,7 +26,7 @@ type Claims struct {
 	jwt.StandardClaims
 }
 
-var secretToken = "112233445566"
+var secretToken = []byte("112233445566")
 
 // All handlers take an http.ResponseWriter and an *http.Request for fulfilling the requirements
 // of mux.HandleFunc.
@@ -86,6 +86,7 @@ func validate(email string, pass string, w http.ResponseWriter) map[string]inter
 		return map[string]interface{}{"message": "wrong password"}
 	}
 	fmt.Println(dbUser)
+
 	expiration := time.Now().Add(5 * time.Minute)
 	claims := &Claims{
 		Email: dbUser.Email,
@@ -94,7 +95,7 @@ func validate(email string, pass string, w http.ResponseWriter) map[string]inter
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(secretToken))
+	tokenString, err := token.SignedString(secretToken)
 	if err != nil {
 		return map[string]interface{}{"message": "problem generating token"}
 	}
@@ -104,6 +105,11 @@ func validate(email string, pass string, w http.ResponseWriter) map[string]inter
 		Value:   tokenString,
 		Expires: expiration,
 	})
+
+	_, err = db.Exec("INSERT INTO RevokedKeys VALUES(?, ?)", tokenString, expiration)
+	if err != nil {
+		return map[string]interface{}{"message": "server problem with authkey"}
+	}
 
 	var response = map[string]interface{}{"login": "good"}
 	response["jwt"] = tokenString
@@ -130,13 +136,10 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenString := c.Value
 	claims := &Claims{}
-
 	token, err := jwt.ParseWithClaims(tokenString, claims,
 		func(token *jwt.Token) (interface{}, error) {
 			return secretToken, nil
 		})
-	fmt.Println(token)
-	fmt.Println(err)
 	if err != nil {
 		if err == jwt.ErrSignatureInvalid {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -149,6 +152,13 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	if !token.Valid {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
+	}
+
+	//check if key is in revoked table
+	row := db.QueryRow("SELECT key FROM RevokedKeys WHERE key=?", tokenString)
+	err = row.Scan()
+	if err != sql.ErrNoRows { //key has been revoked
+		http.Error(w, "token has expired", http.StatusBadRequest)
 	}
 
 	w.Write([]byte(fmt.Sprintf("Welcome home, %s!", claims.Email)))
@@ -187,6 +197,8 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
+
+	//go routine to check revoked keys table and purge based on expiry time
 
 	log.Fatal(srv.ListenAndServe())
 }

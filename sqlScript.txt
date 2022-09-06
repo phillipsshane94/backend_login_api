@@ -4,3 +4,5 @@ CREATE TABLE ArrayTestTable (
 	firstName TEXT,
 	lastName TEXT
 );
+
+CREATE TABLE RevokedKeys(key string, expiration time); 
