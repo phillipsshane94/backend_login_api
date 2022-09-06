@@ -57,7 +57,6 @@ func SignupHandler(w http.ResponseWriter, r *http.Request) {
 // LoginHandler
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
 	user := User{}
 	json.NewDecoder(r.Body).Decode(&user)
 	login := validate(user.Email, user.Password, w)
@@ -67,6 +66,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Error(w, login["message"].(string), http.StatusBadRequest)
 	}
+
 }
 
 func validate(email string, pass string, w http.ResponseWriter) map[string]interface{} {
@@ -85,7 +85,7 @@ func validate(email string, pass string, w http.ResponseWriter) map[string]inter
 	if passErr != nil {
 		return map[string]interface{}{"message": "wrong password"}
 	}
-
+	fmt.Println(dbUser)
 	expiration := time.Now().Add(5 * time.Minute)
 	claims := &Claims{
 		Email: dbUser.Email,
@@ -105,13 +105,8 @@ func validate(email string, pass string, w http.ResponseWriter) map[string]inter
 		Expires: expiration,
 	})
 
-	// _, err = db.Exec("INSERT INTO ArrayTestTable (token) VALUES (?) WHERE email=?", token, email)
-	// if err != nil {
-	// 	return map[string]interface{}{"message": "problem inserting token"}
-	// }
-
 	var response = map[string]interface{}{"login": "good"}
-	response["jwt"] = token
+	response["jwt"] = tokenString
 	response["data"] = dbUser
 	return response
 }
@@ -133,7 +128,6 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
 	tokenString := c.Value
 	claims := &Claims{}
 
@@ -141,6 +135,8 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 		func(token *jwt.Token) (interface{}, error) {
 			return secretToken, nil
 		})
+	fmt.Println(token)
+	fmt.Println(err)
 	if err != nil {
 		if err == jwt.ErrSignatureInvalid {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
