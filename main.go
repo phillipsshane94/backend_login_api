@@ -61,10 +61,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	login := login(user.Email, user.Password)
 	if login["login"] == "good" {
 		response := login
-		fmt.Println(response)
 		json.NewEncoder(w).Encode(response)
 	} else {
-		http.Error(w, "wrong email or password", http.StatusBadRequest)
+		http.Error(w, login["message"].(string), http.StatusBadRequest)
 	}
 }
 
@@ -73,7 +72,6 @@ func login(email string, pass string) map[string]interface{} {
 
 	row := db.QueryRow("SELECT email, password, firstname, lastname FROM ArrayTestTable WHERE email = ?", email)
 	err = row.Scan(&dbUser.Email, &dbUser.Password, &dbUser.FirstName, &dbUser.LastName)
-	fmt.Println(dbUser)
 	if err != nil {
 		return map[string]interface{}{"message": "account not found"}
 	}
