@@ -32,3 +32,58 @@ Crypto/bcrypt was imported simply for hashing provided passwords.
 
 ### Endpoints
 
+POST http://localhost:8080/user/signup
+
+The signup endpoint allows a user to sign up providing an email, password, first name, and last name.  The json structure for sending these requests is as follows:
+```
+{
+    "email": "example@place.com",
+    "password": "notPassword",
+    "firstname": "Jon",
+    "lastname": "Doe"
+}
+```
+This endpoint will respond with a very similar json structure, but with an encoded password.
+```
+{
+    "email": "example@place.com",
+    "password": "$2a$04$gyekJg9HwAC9iARcjR145uFII3/NTQZuuPjZ4ApFE2/cD/Iy7gsUG",
+    "firstname": "Jon",
+    "lastname": "Doe"
+}
+```
+
+GET http://localhost:8080/user/login
+
+The login endpoint allows a user to log in by providing an email and password.  The json for sending requests is as follows:
+```
+{
+    "email": "test1@place.com",
+    "password": "123456"
+}
+```
+Upon successful login:
+```
+{
+    "login": "success"
+}
+```
+Upon failed login, it will respond with "wrong password" or "account not found."
+
+GET http://localhost:8080/user/info
+
+The info endpoint will display the current logged in user's first and last name.  Requires user to be logged in (the cookie for that user must be set), but no json is necessary.  The response from this endpoint is as follows:
+```
+{
+    "user": "Shane Phillips"
+}
+``` 
+
+GET http://localhost:8080/user/logout
+
+The logout endpoint will remove the user's token from the active session, revoking access from the info endpoint.  The user must be logged in again to create a new token for the session.  Requires the user to be logged in (cookie for that user must be set), but no json is necessary.  The response from this endpoint on successful logout is as follows: 
+```
+{
+    "logout": "success"
+}
+```
