@@ -11,6 +11,8 @@ If errors come up due to docker, it can also be run via a simple "go run main.go
 
 https://www.postman.com/phillipsshane94/workspace/arraytest/collection/23024815-58e7585a-c18c-443f-8c70-57f36de7db73?action=share&creator=23024815
 
+Fork the postman request to view the updated collection.  
+
 ## Design Decisions
 
 For the database, I went with sqlite; it's super lightweight and easy to throw into a project with minimal effort.  
@@ -30,11 +32,3 @@ Crypto/bcrypt was imported simply for hashing provided passwords.
 
 ### Endpoints
 
-- GET /user/home 
-  - handled by the HomeHandler
-- POST /user/signup
-  - handled by the SignupHandler
-- GET /user/login
-  - handled by the LoginHandler
-- GET /user/logout
-  - handled by the LogoutHandler

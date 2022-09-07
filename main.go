@@ -64,7 +64,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	user := User{}
 	json.NewDecoder(r.Body).Decode(&user)
 	login := validate(user.Email, user.Password, w)
-	if login["login"] == "good" {
+	if login["login"] == "success" {
 		response := login
 		json.NewEncoder(w).Encode(response)
 	} else {
@@ -117,8 +117,7 @@ func validate(email string, pass string, w http.ResponseWriter) map[string]inter
 		return map[string]interface{}{"message": "problem inserting token into session"}
 	}
 
-	var response = map[string]interface{}{"login": "good"}
-	response["data"] = dbUser
+	var response = map[string]interface{}{"login": "success"}
 	return response
 }
 
@@ -157,14 +156,15 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Write([]byte("Logged out!"))
+	m := map[string]string{"logout": "success"}
+	json.NewEncoder(w).Encode(m)
 }
 
-// HomeHandler checks the cookie of the logged in user then generates a Claims object from the
+// InfoHandler checks the cookie of the logged in user then generates a Claims object from the
 // token info in the cookie and checks the validity of the token.  This function also queries the
 // revokedTokens table for the current token, returning an error if the current token is in that table.
 // Otherwise, ArrayTestTable is queried for the firstname of the user and the user is welcomed home.
-func HomeHandler(w http.ResponseWriter, r *http.Request) {
+func InfoHandler(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("token")
 	if err != nil {
 		if err == http.ErrNoCookie {
@@ -213,12 +213,15 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var fname string
-	row = db.QueryRow("SELECT firstname FROM ArrayTestTable WHERE email=?", claims.Email)
-	err = row.Scan(&fname)
+	var lname string
+	row = db.QueryRow("SELECT firstname, lastname FROM ArrayTestTable WHERE email=?", claims.Email)
+	err = row.Scan(&fname, &lname)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	w.Write([]byte(fmt.Sprintf("Welcome home, %s!", fname)))
+
+	m := map[string]string{"user": fmt.Sprintf("%s %s", fname, lname)}
+	json.NewEncoder(w).Encode(m)
 }
 
 // hash is used to generate an encrypted password from what was provided by the user.
@@ -248,7 +251,7 @@ func main() {
 	}
 	defer db.Close()
 
-	r.HandleFunc("/user/home", HomeHandler).Methods("GET")
+	r.HandleFunc("/user/info", InfoHandler).Methods("GET")
 	r.HandleFunc("/user/signup", SignupHandler).Methods("POST")
 	r.HandleFunc("/user/login", LoginHandler).Methods("GET")
 	r.HandleFunc("/user/logout", LogoutHandler).Methods("GET")
