@@ -5,4 +5,4 @@ CREATE TABLE ArrayTestTable (
 	lastName TEXT
 );
 
-CREATE TABLE RevokedKeys(key string, expiration time); 
+CREATE TABLE Session(token TEXT); 
