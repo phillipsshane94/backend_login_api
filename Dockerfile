@@ -7,5 +7,6 @@ RUN go mod download
 COPY *.go ./
 COPY *.db ./
 EXPOSE 8080
+RUN apt-get update && apt-get -y install gcc
 RUN go build -o /main.go
 CMD [ "/main.go" ]
