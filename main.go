@@ -121,9 +121,8 @@ func validate(email string, pass string, w http.ResponseWriter) map[string]inter
 	return response
 }
 
-// LogoutHandler checks the cookie of the logged in user, generates a Claims object from the cookie info,
-// pulls the token expiration time, and inserts the token with the expiration time into the
-// revokedTokens table.
+// LogoutHandler checks the cookie of the logged in user, pulls the token value from the session's cookie,
+// and deletes that entry from the Session table.
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("token")
 	if err != nil {
@@ -134,21 +133,8 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
-	//pull claim to get expiration of token
+	//pull claim to get token
 	tokenString := c.Value
-	claims := &Claims{}
-	_, err = jwt.ParseWithClaims(tokenString, claims,
-		func(token *jwt.Token) (interface{}, error) {
-			return secretToken, nil
-		})
-	if err != nil {
-		if err == jwt.ErrSignatureInvalid {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
 
 	//inserts token with expiration time
 	_, err = db.Exec("DELETE FROM Session WHERE token=?", tokenString)
@@ -161,9 +147,9 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // InfoHandler checks the cookie of the logged in user then generates a Claims object from the
-// token info in the cookie and checks the validity of the token.  This function also queries the
-// revokedTokens table for the current token, returning an error if the current token is in that table.
-// Otherwise, ArrayTestTable is queried for the firstname of the user and the user is welcomed home.
+// token info in the cookie and checks the validity of the token.  This function queries the Session
+// table to make sure the user's token is in the table.  It queries the ArrayTestTable for
+// the user's first name and last name to write back to the client.
 func InfoHandler(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("token")
 	if err != nil {
@@ -243,7 +229,6 @@ var err error
 
 func main() {
 	r := mux.NewRouter().StrictSlash(true)
-	// r.Use(setContentType)
 	db, err = sql.Open("sqlite3", "ArrayTestDb.db")
 	if err != nil {
 		log.Printf("problem opening the database: %s", err)
