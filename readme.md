@@ -9,6 +9,8 @@ If errors come up due to docker, it can also be run via a simple "go run main.go
 
 ## Postman Collection Link
 
+[![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/23024815-58e7585a-c18c-443f-8c70-57f36de7db73?action=collection%2Ffork&collection-url=entityId%3D23024815-58e7585a-c18c-443f-8c70-57f36de7db73%26entityType%3Dcollection%26workspaceId%3D09749b0c-2e71-41a3-b3f8-ee47ea0d4917)
+
 https://www.postman.com/phillipsshane94/workspace/arraytest/collection/23024815-58e7585a-c18c-443f-8c70-57f36de7db73?action=share&creator=23024815
 
 ## Design Decisions
