@@ -1,4 +1,4 @@
-CREATE TABLE ArrayTestTable (
+CREATE TABLE User (
 	email TEXT NOT NULL PRIMARY KEY,
 	password CHAR(32) NOT NULL,
 	firstName TEXT,

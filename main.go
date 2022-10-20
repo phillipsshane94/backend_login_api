@@ -43,12 +43,12 @@ func SignupHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(newUser)
 
 	//check if the email is already in the db
-	_, err := db.Query("SELECT email FROM ArrayTestTable WHERE email = ?", newUser.Email)
+	_, err := db.Query("SELECT email FROM User WHERE email = ?", newUser.Email)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	_, err = db.Exec("INSERT INTO ArrayTestTable Values(?, ?, ?, ?)", newUser.Email, newUser.Password, newUser.FirstName, newUser.LastName)
+	_, err = db.Exec("INSERT INTO User Values(?, ?, ?, ?)", newUser.Email, newUser.Password, newUser.FirstName, newUser.LastName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -80,7 +80,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 func validate(email string, pass string, w http.ResponseWriter) map[string]interface{} {
 	dbUser := User{}
 
-	row := db.QueryRow("SELECT email, password, firstname, lastname FROM ArrayTestTable WHERE email = ?", email)
+	row := db.QueryRow("SELECT email, password, firstname, lastname FROM User WHERE email = ?", email)
 	err = row.Scan(&dbUser.Email, &dbUser.Password, &dbUser.FirstName, &dbUser.LastName)
 	if err != nil {
 		return map[string]interface{}{"message": "account not found"}
@@ -148,7 +148,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 // InfoHandler checks the cookie of the logged in user then generates a Claims object from the
 // token info in the cookie and checks the validity of the token.  This function queries the Session
-// table to make sure the user's token is in the table.  It queries the ArrayTestTable for
+// table to make sure the user's token is in the table.  It queries the User for
 // the user's first name and last name to write back to the client.
 func InfoHandler(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("token")
@@ -200,7 +200,7 @@ func InfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	var fname string
 	var lname string
-	row = db.QueryRow("SELECT firstname, lastname FROM ArrayTestTable WHERE email=?", claims.Email)
+	row = db.QueryRow("SELECT firstname, lastname FROM User WHERE email=?", claims.Email)
 	err = row.Scan(&fname, &lname)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
